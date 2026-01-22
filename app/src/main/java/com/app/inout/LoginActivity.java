@@ -24,14 +24,10 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.inout.app.databinding.ActivityLoginBinding;
 import com.inout.app.models.User;
 import com.inout.app.utils.EncryptionHelper;
-
-import java.util.HashMap;
-import java.util.Map;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -42,9 +38,8 @@ public class LoginActivity extends AppCompatActivity {
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
     
-    private String expectedRole; // "admin" or "employee" from local storage
+    private String expectedRole;
 
-    // Modern ActivityResultLauncher for Google Sign-In intent
     private final ActivityResultLauncher<Intent> signInLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -61,7 +56,7 @@ public class LoginActivity extends AppCompatActivity {
                         Toast.makeText(this, "Google Sign-In Failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     }
                 } else {
-                    updateUI(null); // Stop loading spinner
+                    updateUI(null);
                 }
             });
 
@@ -71,23 +66,32 @@ public class LoginActivity extends AppCompatActivity {
         binding = ActivityLoginBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // 1. Initialize Firebase & Local Config
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
-        expectedRole = EncryptionHelper.getInstance(this).getUserRole();
+        EncryptionHelper encryptionHelper = EncryptionHelper.getInstance(this);
+        expectedRole = encryptionHelper.getUserRole();
         
-        // 2. Configure Google Sign-In
-        // We use the default_web_client_id. In a dynamic setup, this key MUST match 
-        // the client_id in the uploaded google-services.json for the 'oauth_client' type 3.
+        // =====================================================================
+        // CRITICAL CHANGE: DYNAMICALLY GET WEB CLIENT ID FROM STORED JSON
+        // =====================================================================
+        String webClientId = encryptionHelper.getWebClientId();
+
+        if (webClientId == null) {
+            Toast.makeText(this, "FATAL ERROR: Google Client ID not found in configuration. Please re-setup.", Toast.LENGTH_LONG).show();
+            binding.btnGoogleSignIn.setEnabled(false);
+            return; // Stop initialization if the ID is missing
+        }
+        // =====================================================================
+
+        // Configure Google Sign-In with the DYNAMIC ID
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestIdToken(getString(R.string.default_web_client_id)) 
+                .requestIdToken(webClientId) // Use the ID extracted from the JSON
                 .requestEmail()
                 .build();
 
         mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
 
-        // 3. UI Setup
-        String companyName = EncryptionHelper.getInstance(this).getCompanyName();
+        String companyName = encryptionHelper.getCompanyName();
         binding.tvLoginTitle.setText("Login to " + companyName);
         binding.tvLoginSubtitle.setText("Role: " + (expectedRole != null ? expectedRole.toUpperCase() : "UNKNOWN"));
 
@@ -97,7 +101,6 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        // Check if user is already signed in
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser != null) {
             checkUserInFirestore(currentUser);
@@ -129,10 +132,6 @@ public class LoginActivity extends AppCompatActivity {
                 });
     }
 
-    /**
-     * Checks if the user document exists in Firestore.
-     * If not, creates it with the correct role.
-     */
     private void checkUserInFirestore(FirebaseUser firebaseUser) {
         if (firebaseUser == null) return;
 
@@ -140,18 +139,15 @@ public class LoginActivity extends AppCompatActivity {
 
         userRef.get().addOnSuccessListener(documentSnapshot -> {
             if (documentSnapshot.exists()) {
-                // User exists - Check if roles match
                 User user = documentSnapshot.toObject(User.class);
                 if (user != null && user.getRole().equals(expectedRole)) {
                     proceedToDashboard(user);
                 } else {
-                    // Role Mismatch (e.g., trying to login as Admin but is actually an Employee)
                     Toast.makeText(LoginActivity.this, "Error: Account role mismatch.", Toast.LENGTH_LONG).show();
                     mAuth.signOut();
                     updateUI(null);
                 }
             } else {
-                // New User - Create Profile
                 createUserProfile(firebaseUser, userRef);
             }
         }).addOnFailureListener(e -> {
@@ -164,16 +160,14 @@ public class LoginActivity extends AppCompatActivity {
     private void createUserProfile(FirebaseUser firebaseUser, DocumentReference userRef) {
         User newUser = new User(firebaseUser.getUid(), firebaseUser.getEmail(), expectedRole);
         
-        // Auto-fill name if available from Google
         if (firebaseUser.getDisplayName() != null) {
             newUser.setName(firebaseUser.getDisplayName());
         }
 
-        // Logic based on Role
         if ("admin".equals(expectedRole)) {
-            newUser.setApproved(true); // Admin is auto-approved (they possess the JSON)
+            newUser.setApproved(true);
         } else {
-            newUser.setApproved(false); // Employee must be approved by Admin
+            newUser.setApproved(false);
         }
 
         userRef.set(newUser)
@@ -194,15 +188,9 @@ public class LoginActivity extends AppCompatActivity {
         if ("admin".equals(user.getRole())) {
             intent = new Intent(this, AdminDashboardActivity.class);
         } else {
-            // Employee Flow
-            // If profile is incomplete (no phone/photo) or not approved, we generally go to Dashboard
-            // Dashboard handles the "Locked" state if not approved.
-            // ProfileActivity is checked there or here. 
-            // We'll send to Dashboard, Dashboard checks if profile needed.
             intent = new Intent(this, EmployeeDashboardActivity.class);
         }
         
-        // Clear back stack so they can't go back to Login
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
