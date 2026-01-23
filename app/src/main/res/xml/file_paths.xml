@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- This allows sharing of images saved in the app's internal cache folder -->
+    <cache-path
+        name="shared_images"
+        path="images/" />
+</paths>
