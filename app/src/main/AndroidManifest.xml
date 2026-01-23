@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     
-    <!-- Camera permission for QR Scanning (Employee) and Profile Photos -->
+    <!-- Camera permission for QR Scanning (Employee) -->
     <uses-permission android:name="android.permission.CAMERA" />
     
     <!-- Location permissions for Geofencing Check-In -->
@@ -60,7 +60,7 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
-        <!-- 5. Admin Dashboard -->
+        <!-- 5. Admin Dashboard - FIXED: Now correctly uses the NoActionBar theme from the application tag -->
         <activity
             android:name=".AdminDashboardActivity"
             android:exported="false"
@@ -73,13 +73,13 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
-        <!-- 7. Employee Profile Setup (Photo/Phone) -->
+        <!-- 7. Employee Profile Setup -->
         <activity
             android:name=".EmployeeProfileActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
 
-        <!-- 8. Employee Dashboard -->
+        <!-- 8. Employee Dashboard - FIXED: Now correctly uses the NoActionBar theme -->
         <activity
             android:name=".EmployeeDashboardActivity"
             android:exported="false"
