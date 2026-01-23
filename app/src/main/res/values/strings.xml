@@ -35,8 +35,13 @@
     <string name="assign_emp_id">Assign Employee ID</string>
     <string name="remove_employee">Remove Employee</string>
 
-    <!-- Employee Flow -->
+    <!-- Employee Flow & QR Scan -->
     <string name="scan_qr_title">Scan Company QR</string>
+    <string name="upload_qr_gallery">Upload QR from Gallery</string>
+    <string name="one_phone_hint">Only have one phone?</string>
+    <string name="qr_scan_instruction">Align code in frame or upload image</string>
+
+    <!-- Profile Setup -->
     <string name="profile_setup">Complete Profile</string>
     <string name="waiting_approval">Waiting for Admin Approval</string>
     <string name="pending_approval_desc">Your profile has been submitted. Please wait for the Company Admin to approve your account and assign your Employee ID.</string>
