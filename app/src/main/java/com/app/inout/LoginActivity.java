@@ -29,6 +29,12 @@ import com.inout.app.databinding.ActivityLoginBinding;
 import com.inout.app.models.User;
 import com.inout.app.utils.EncryptionHelper;
 
+/**
+ * Handles Google Sign-In and initial User Profile creation.
+ * ZERO BILLING DESIGN:
+ * - Retrieves Google Profile Photo URL directly from the Auth object.
+ * - Saves the URL as a string in Firestore.
+ */
 public class LoginActivity extends AppCompatActivity {
 
     private static final String TAG = "LoginActivity";
@@ -71,21 +77,17 @@ public class LoginActivity extends AppCompatActivity {
         EncryptionHelper encryptionHelper = EncryptionHelper.getInstance(this);
         expectedRole = encryptionHelper.getUserRole();
         
-        // =====================================================================
-        // CRITICAL CHANGE: DYNAMICALLY GET WEB CLIENT ID FROM STORED JSON
-        // =====================================================================
+        // Dynamically get Web Client ID from the uploaded JSON
         String webClientId = encryptionHelper.getWebClientId();
 
         if (webClientId == null) {
-            Toast.makeText(this, "FATAL ERROR: Google Client ID not found in configuration. Please re-setup.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Configuration Error: Google Client ID not found. Please re-upload JSON.", Toast.LENGTH_LONG).show();
             binding.btnGoogleSignIn.setEnabled(false);
-            return; // Stop initialization if the ID is missing
+            return;
         }
-        // =====================================================================
 
-        // Configure Google Sign-In with the DYNAMIC ID
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestIdToken(webClientId) // Use the ID extracted from the JSON
+                .requestIdToken(webClientId)
                 .requestEmail()
                 .build();
 
@@ -125,7 +127,7 @@ public class LoginActivity extends AppCompatActivity {
                             checkUserInFirestore(user);
                         } else {
                             Log.w(TAG, "signInWithCredential:failure", task.getException());
-                            Toast.makeText(LoginActivity.this, "Authentication Failed.", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(LoginActivity.this, "Firebase Authentication Failed.", Toast.LENGTH_SHORT).show();
                             updateUI(null);
                         }
                     }
@@ -141,6 +143,10 @@ public class LoginActivity extends AppCompatActivity {
             if (documentSnapshot.exists()) {
                 User user = documentSnapshot.toObject(User.class);
                 if (user != null && user.getRole().equals(expectedRole)) {
+                    // Update photoURL if it changed on Google side
+                    if (firebaseUser.getPhotoUrl() != null) {
+                        userRef.update("photoUrl", firebaseUser.getPhotoUrl().toString());
+                    }
                     proceedToDashboard(user);
                 } else {
                     Toast.makeText(LoginActivity.this, "Error: Account role mismatch.", Toast.LENGTH_LONG).show();
@@ -164,6 +170,11 @@ public class LoginActivity extends AppCompatActivity {
             newUser.setName(firebaseUser.getDisplayName());
         }
 
+        // **ZERO BILLING FIX:** Set photoUrl from Google Auth profile
+        if (firebaseUser.getPhotoUrl() != null) {
+            newUser.setPhotoUrl(firebaseUser.getPhotoUrl().toString());
+        }
+
         if ("admin".equals(expectedRole)) {
             newUser.setApproved(true);
         } else {
@@ -172,7 +183,7 @@ public class LoginActivity extends AppCompatActivity {
 
         userRef.set(newUser)
                 .addOnSuccessListener(aVoid -> {
-                    Toast.makeText(LoginActivity.this, "Account Created.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(LoginActivity.this, "Account Created Successfully.", Toast.LENGTH_SHORT).show();
                     proceedToDashboard(newUser);
                 })
                 .addOnFailureListener(e -> {
