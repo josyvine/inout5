@@ -13,7 +13,6 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.inout.app.databinding.FragmentEmployeeCheckinBinding;
@@ -26,7 +25,7 @@ import com.inout.app.utils.TimeUtils;
 
 /**
  * Fragment where employees perform Check-In and Check-Out.
- * Strictly enforces: Fingerprint Success + GPS within 100m.
+ * FIXED: Displays real user data and links to the assigned office location.
  */
 public class EmployeeCheckInFragment extends Fragment {
 
@@ -55,90 +54,115 @@ public class EmployeeCheckInFragment extends Fragment {
         mAuth = FirebaseAuth.getInstance();
         locationHelper = new LocationHelper(requireContext());
 
+        // Initial UI State
+        binding.btnCheckIn.setEnabled(false);
+        binding.btnCheckOut.setEnabled(false);
+
         loadUserDataAndStatus();
 
         binding.btnCheckIn.setOnClickListener(v -> initiateAction(true));
         binding.btnCheckOut.setOnClickListener(v -> initiateAction(false));
     }
 
+    /**
+     * Fetches user profile to display real Name/ID and retrieve the office assignment.
+     */
     private void loadUserDataAndStatus() {
+        if (mAuth.getCurrentUser() == null) return;
         String uid = mAuth.getCurrentUser().getUid();
         
-        // 1. Get User Profile to find assigned location
-        db.collection("users").document(uid).get().addOnSuccessListener(doc -> {
+        // Listen for profile changes (Approval, Name updates, Location assignment)
+        db.collection("users").document(uid).addSnapshotListener((doc, error) -> {
+            if (error != null || doc == null || !doc.exists()) return;
+
             currentUser = doc.toObject(User.class);
-            if (currentUser != null && currentUser.getAssignedLocationId() != null) {
-                fetchAssignedLocation(currentUser.getAssignedLocationId());
+            if (currentUser != null) {
+                // FIXED: Replace XML placeholders with live database data
+                binding.tvEmployeeName.setText(currentUser.getName() != null ? currentUser.getName() : "Unknown User");
+                binding.tvEmployeeId.setText(currentUser.getEmployeeId() != null ? currentUser.getEmployeeId() : "Pending ID");
+
+                // Check if Admin has assigned a location ID (e.g., the ID for Canara Bank)
+                if (currentUser.getAssignedLocationId() != null && !currentUser.getAssignedLocationId().isEmpty()) {
+                    fetchAssignedLocationDetails(currentUser.getAssignedLocationId());
+                } else {
+                    binding.tvStatus.setText("Status: Waiting for Admin to assign an office location.");
+                }
+                
+                // Also load today's attendance state
+                loadTodayAttendance();
             }
-            // 2. Check if already checked in today
-            loadTodayAttendance();
         });
     }
 
-    private void fetchAssignedLocation(String locId) {
+    /**
+     * Retrieves the Lat/Lng and name of the specific office assigned to this employee.
+     */
+    private void fetchAssignedLocationDetails(String locId) {
         db.collection("locations").document(locId).get().addOnSuccessListener(doc -> {
             assignedLocation = doc.toObject(CompanyConfig.class);
-        });
+            if (assignedLocation != null) {
+                Log.d(TAG, "Office Assigned: " + assignedLocation.getName());
+                updateUIBasedOnStatus();
+            }
+        }).addOnFailureListener(e -> Log.e(TAG, "Failed to fetch location info", e));
     }
 
     private void loadTodayAttendance() {
-        if (currentUser == null) return;
+        if (currentUser == null || currentUser.getEmployeeId() == null) return;
         
         String dateId = TimeUtils.getCurrentDateId();
-        // Record ID is employeeId_dateId
         String recordId = currentUser.getEmployeeId() + "_" + dateId;
 
         db.collection("attendance").document(recordId).addSnapshotListener((snapshot, e) -> {
             if (snapshot != null && snapshot.exists()) {
                 todayRecord = snapshot.toObject(AttendanceRecord.class);
-                updateUIBasedOnStatus();
             } else {
                 todayRecord = null;
-                updateUIBasedOnStatus();
             }
+            updateUIBasedOnStatus();
         });
     }
 
     private void updateUIBasedOnStatus() {
+        if (currentUser == null) return;
+
+        // If location isn't fetched yet, keep buttons disabled
+        if (assignedLocation == null) {
+            binding.btnCheckIn.setEnabled(false);
+            binding.btnCheckOut.setEnabled(false);
+            return;
+        }
+
         if (todayRecord == null) {
-            // Not checked in yet
             binding.btnCheckIn.setEnabled(true);
             binding.btnCheckOut.setEnabled(false);
-            binding.tvStatus.setText("Status: Not Checked In");
-        } else if (todayRecord.getCheckOutTime() == null) {
-            // Checked in but not out
+            binding.tvStatus.setText("Status: Not Checked In (" + assignedLocation.getName() + ")");
+        } else if (todayRecord.getCheckOutTime() == null || todayRecord.getCheckOutTime().isEmpty()) {
             binding.btnCheckIn.setEnabled(false);
             binding.btnCheckOut.setEnabled(true);
             binding.tvStatus.setText("Status: Checked In at " + todayRecord.getCheckInTime());
         } else {
-            // Both done
             binding.btnCheckIn.setEnabled(false);
             binding.btnCheckOut.setEnabled(false);
-            binding.tvStatus.setText("Status: Completed for Today (" + todayRecord.getTotalHours() + ")");
+            binding.tvStatus.setText("Status: Day Completed (" + todayRecord.getTotalHours() + ")");
         }
     }
 
-    /**
-     * Starts the verification sequence.
-     * @param isCheckIn True for Check-In, False for Check-Out
-     */
     private void initiateAction(boolean isCheckIn) {
         if (assignedLocation == null) {
             Toast.makeText(getContext(), "Error: No office location assigned to you.", Toast.LENGTH_LONG).show();
             return;
         }
 
-        // STEP 1: Biometric Verification
         BiometricHelper.authenticate(requireActivity(), new BiometricHelper.BiometricCallback() {
             @Override
             public void onAuthenticationSuccess() {
-                // STEP 2: Location Verification
                 verifyLocationAndProceed(isCheckIn);
             }
 
             @Override
             public void onAuthenticationError(String errorMsg) {
-                Toast.makeText(getContext(), "Biometric Error: " + errorMsg, Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Auth Error: " + errorMsg, Toast.LENGTH_SHORT).show();
             }
 
             @Override
@@ -166,7 +190,8 @@ public class EmployeeCheckInFragment extends Fragment {
                         if (isCheckIn) performCheckIn(location);
                         else performCheckOut(location);
                     } else {
-                        Toast.makeText(getContext(), "Access Denied: You are not within the office radius.", Toast.LENGTH_LONG).show();
+                        String msg = "Denied: You are not within the 100m radius of " + assignedLocation.getName();
+                        Toast.makeText(getContext(), msg, Toast.LENGTH_LONG).show();
                     }
                 }
             }
@@ -195,9 +220,12 @@ public class EmployeeCheckInFragment extends Fragment {
         record.setCheckInLng(loc.getLongitude());
         record.setFingerprintVerified(true);
         record.setLocationVerified(true);
+        
+        // Save UID to satisfy security rules (resource.data.uid)
+        record.setRecordId(recordId); 
 
         db.collection("attendance").document(recordId).set(record)
-                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Check-In Successful!", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Check-In Success!", Toast.LENGTH_SHORT).show());
     }
 
     private void performCheckOut(Location loc) {
@@ -213,7 +241,7 @@ public class EmployeeCheckInFragment extends Fragment {
                         "checkOutLng", loc.getLongitude(),
                         "totalHours", totalHrs
                 )
-                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Check-Out Successful!", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Check-Out Success!", Toast.LENGTH_SHORT).show());
     }
 
     @Override
