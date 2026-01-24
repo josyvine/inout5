@@ -8,7 +8,10 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -25,7 +28,8 @@ import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.inout.app.databinding.FragmentAdminEmployeesBinding;
 import com.inout.app.models.User;
-import com.inout.app.adapters.EmployeeListAdapter; // Assumes adapter is in a sub-package
+import com.inout.app.models.CompanyConfig;
+import com.inout.app.adapters.EmployeeListAdapter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +41,7 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
     private FirebaseFirestore db;
     private EmployeeListAdapter adapter;
     private List<User> employeeList;
+    private List<CompanyConfig> locationList; // To store office locations for the dropdown
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -50,127 +55,123 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
 
         db = FirebaseFirestore.getInstance();
         employeeList = new ArrayList<>();
+        locationList = new ArrayList<>();
         
         setupRecyclerView();
         listenForEmployees();
+        fetchLocations(); // Load locations early so they are ready for the dialog
     }
 
     private void setupRecyclerView() {
         binding.recyclerViewEmployees.setLayoutManager(new LinearLayoutManager(getContext()));
-        // Initialize adapter with empty list and this fragment as the listener
         adapter = new EmployeeListAdapter(getContext(), employeeList, this);
         binding.recyclerViewEmployees.setAdapter(adapter);
     }
 
+    private void fetchLocations() {
+        db.collection("locations").get().addOnSuccessListener(queryDocumentSnapshots -> {
+            locationList.clear();
+            for (DocumentSnapshot doc : queryDocumentSnapshots) {
+                CompanyConfig loc = doc.toObject(CompanyConfig.class);
+                if (loc != null) {
+                    loc.setId(doc.getId());
+                    locationList.add(loc);
+                }
+            }
+        });
+    }
+
     private void listenForEmployees() {
         binding.progressBar.setVisibility(View.VISIBLE);
-
-        // Query: Get all users where role is "employee"
         db.collection("users")
                 .whereEqualTo("role", "employee")
                 .addSnapshotListener(new EventListener<QuerySnapshot>() {
                     @Override
                     public void onEvent(@Nullable QuerySnapshot value, @Nullable FirebaseFirestoreException error) {
                         binding.progressBar.setVisibility(View.GONE);
-
-                        if (error != null) {
-                            Log.e(TAG, "Listen failed.", error);
-                            return;
-                        }
+                        if (error != null) return;
 
                         if (value != null) {
                             employeeList.clear();
                             for (DocumentSnapshot doc : value) {
                                 User user = doc.toObject(User.class);
                                 if (user != null) {
-                                    // Ensure UID is set from the document ID if missing in object
                                     user.setUid(doc.getId());
                                     employeeList.add(user);
                                 }
                             }
-                            // Notify adapter
                             adapter.notifyDataSetChanged();
-                            
-                            if (employeeList.isEmpty()) {
-                                binding.tvEmptyView.setVisibility(View.VISIBLE);
-                            } else {
-                                binding.tvEmptyView.setVisibility(View.GONE);
-                            }
+                            binding.tvEmptyView.setVisibility(employeeList.isEmpty() ? View.VISIBLE : View.GONE);
                         }
                     }
                 });
     }
 
-    // Callback from Adapter when "Approve" button is clicked
     @Override
     public void onApproveClicked(User user) {
+        if (locationList.isEmpty()) {
+            Toast.makeText(getContext(), "Please add an Office Location first!", Toast.LENGTH_LONG).show();
+            return;
+        }
         showApproveDialog(user);
     }
 
-    // Callback from Adapter when "Delete" (optional) is clicked
     @Override
     public void onDeleteClicked(User user) {
-        showDeleteDialog(user);
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Remove Employee")
+                .setMessage("Delete " + user.getName() + "?")
+                .setPositiveButton("Delete", (dialog, which) -> {
+                    db.collection("users").document(user.getUid()).delete();
+                }).setNegativeButton("Cancel", null).show();
     }
 
     private void showApproveDialog(User user) {
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        builder.setTitle("Approve Employee");
-        builder.setMessage("Enter a unique Employee ID (e.g., EMP001) to approve " + user.getName());
+        builder.setTitle("Approve " + user.getName());
 
-        // Set up the input
-        final EditText input = new EditText(requireContext());
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
-        input.setHint("EMP001");
-        builder.setView(input);
+        // Create a layout to hold both Employee ID input and Location Spinner
+        LinearLayout layout = new LinearLayout(requireContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 40, 50, 10);
 
-        // Set up the buttons
-        builder.setPositiveButton("Approve", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                String empId = input.getText().toString().trim();
-                if (!empId.isEmpty()) {
-                    approveUserInFirestore(user, empId);
-                } else {
-                    Toast.makeText(getContext(), "Employee ID is required!", Toast.LENGTH_SHORT).show();
-                }
+        final EditText inputId = new EditText(requireContext());
+        inputId.setHint("Enter Employee ID (e.g. EMP001)");
+        inputId.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        layout.addView(inputId);
+
+        // Location Dropdown
+        final Spinner spinner = new Spinner(requireContext());
+        List<String> names = new ArrayList<>();
+        for (CompanyConfig c : locationList) names.add(c.getName());
+        ArrayAdapter<String> spinAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, names);
+        spinAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(spinAdapter);
+        layout.addView(spinner);
+
+        builder.setView(layout);
+
+        builder.setPositiveButton("Approve", (dialog, which) -> {
+            String empId = inputId.getText().toString().trim();
+            int selectedIndex = spinner.getSelectedItemPosition();
+            if (!empId.isEmpty() && selectedIndex >= 0) {
+                String locId = locationList.get(selectedIndex).getId();
+                approveUserInFirestore(user, empId, locId);
+            } else {
+                Toast.makeText(getContext(), "All fields required!", Toast.LENGTH_SHORT).show();
             }
         });
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
-
+        builder.setNegativeButton("Cancel", null);
         builder.show();
     }
 
-    private void approveUserInFirestore(User user, String empId) {
-        // Update Firestore: Approved = true, EmployeeID = input
+    private void approveUserInFirestore(User user, String empId, String locId) {
         db.collection("users").document(user.getUid())
-                .update("approved", true, "employeeId", empId)
-                .addOnSuccessListener(new OnSuccessListener<Void>() {
-                    @Override
-                    public void onSuccess(Void aVoid) {
-                        Toast.makeText(getContext(), "Employee Approved Successfully.", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        Toast.makeText(getContext(), "Error approving employee: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
-                });
-    }
-
-    private void showDeleteDialog(User user) {
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Remove Employee")
-                .setMessage("Are you sure you want to remove " + user.getName() + "? This cannot be undone.")
-                .setPositiveButton("Remove", (dialog, which) -> {
-                    db.collection("users").document(user.getUid())
-                            .delete()
-                            .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "User removed.", Toast.LENGTH_SHORT).show())
-                            .addOnFailureListener(e -> Toast.makeText(getContext(), "Error removing user.", Toast.LENGTH_SHORT).show());
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+                .update("approved", true, 
+                        "employeeId", empId, 
+                        "assignedLocationId", locId)
+                .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Approved and Assigned!", Toast.LENGTH_SHORT).show())
+                .addOnFailureListener(e -> Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
     }
 
     @Override
