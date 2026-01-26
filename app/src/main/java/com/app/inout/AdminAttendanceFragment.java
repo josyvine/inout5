@@ -1,6 +1,7 @@
 package com.inout.app;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,15 +22,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Admin view for Attendance selection.
- * Updated Logic:
- * 1. Select employee from dropdown.
- * 2. Launches AttendanceProfileDialog (the pop-up window) with CV-style header.
+ * Admin view for Attendance.
+ * 1. Select employee from Spinner.
+ * 2. Opens the Professional Attendance Profile Pop-up (CV-style).
  */
 public class AdminAttendanceFragment extends Fragment {
 
+    private static final String TAG = "AdminAttendanceFrag";
     private FragmentAdminAttendanceBinding binding;
     private FirebaseFirestore db;
+    
     private List<User> employees;
 
     @Override
@@ -45,11 +47,13 @@ public class AdminAttendanceFragment extends Fragment {
         db = FirebaseFirestore.getInstance();
         employees = new ArrayList<>();
 
+        // Load the list of employees into the spinner first
         loadEmployeeList();
     }
 
     /**
      * Fetches all approved employees to populate the selection spinner.
+     * This logic is identical to your original code.
      */
     private void loadEmployeeList() {
         binding.progressBar.setVisibility(View.VISIBLE);
@@ -61,13 +65,14 @@ public class AdminAttendanceFragment extends Fragment {
                     binding.progressBar.setVisibility(View.GONE);
                     employees.clear();
                     List<String> employeeNames = new ArrayList<>();
-                    employeeNames.add("Select an Employee to view Profile");
+                    employeeNames.add("Select an Employee");
 
                     for (DocumentSnapshot doc : queryDocumentSnapshots) {
                         User user = doc.toObject(User.class);
                         if (user != null) {
-                            user.setUid(doc.getId());
+                            user.setUid(doc.getId()); // Ensure UID is preserved
                             employees.add(user);
+                            // Format: Name (EmployeeID)
                             employeeNames.add(user.getName() + " (" + user.getEmployeeId() + ")");
                         }
                     }
@@ -80,6 +85,10 @@ public class AdminAttendanceFragment extends Fragment {
                 });
     }
 
+    /**
+     * Sets up the dropdown menu.
+     * When a name is selected, it triggers the Pop-Up Window.
+     */
     private void setupSpinner(List<String> names) {
         ArrayAdapter<String> spinnerAdapter = new ArrayAdapter<>(requireContext(), 
                 android.R.layout.simple_spinner_item, names);
@@ -90,13 +99,14 @@ public class AdminAttendanceFragment extends Fragment {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if (position > 0) {
-                    // Position 0 is the hint "Select an Employee..."
+                    // Position 0 is the hint "Select an Employee"
+                    // Get the User object for the selected person
                     User selectedUser = employees.get(position - 1);
                     
-                    // NEW LOGIC: Launch the pop-up window instead of showing a list here
+                    // NEW LOGIC: Launch the pop-up profile window
                     openAttendanceProfileDialog(selectedUser);
                     
-                    // Reset spinner selection so it can be clicked again for the same person if needed
+                    // Reset spinner so the same person can be selected again if the dialog is closed
                     binding.spinnerEmployees.setSelection(0);
                 }
             }
@@ -107,10 +117,13 @@ public class AdminAttendanceFragment extends Fragment {
     }
 
     /**
-     * Creates and shows the new Professional Attendance Profile pop-up.
+     * This method initializes and displays the new CV-style Attendance Profile window.
+     * @param user The employee whose attendance is being viewed.
      */
     private void openAttendanceProfileDialog(User user) {
+        // Create the dialog instance and pass the User data to it
         AttendanceProfileDialog dialog = AttendanceProfileDialog.newInstance(user);
+        // Show it as a pop-up over the current screen
         dialog.show(getChildFragmentManager(), "AttendanceProfileDialog");
     }
 
