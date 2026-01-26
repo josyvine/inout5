@@ -1,7 +1,6 @@
 package com.inout.app;
 
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -12,35 +11,26 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
-import com.inout.app.adapters.AttendanceAdapter;
 import com.inout.app.databinding.FragmentAdminAttendanceBinding;
-import com.inout.app.models.AttendanceRecord;
 import com.inout.app.models.User;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Admin view for Attendance.
- * 1. Select employee from Spinner.
- * 2. View monthly records in a CSV-style horizontal table.
- * 
- * CRITICAL: Requires a Composite Index in Firestore Console.
+ * Admin view for Attendance selection.
+ * Updated Logic:
+ * 1. Select employee from dropdown.
+ * 2. Launches AttendanceProfileDialog (the pop-up window) with CV-style header.
  */
 public class AdminAttendanceFragment extends Fragment {
 
-    private static final String TAG = "AdminAttendanceFrag";
     private FragmentAdminAttendanceBinding binding;
     private FirebaseFirestore db;
-    
     private List<User> employees;
-    private List<AttendanceRecord> attendanceLogs;
-    private AttendanceAdapter adapter;
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -54,16 +44,8 @@ public class AdminAttendanceFragment extends Fragment {
 
         db = FirebaseFirestore.getInstance();
         employees = new ArrayList<>();
-        attendanceLogs = new ArrayList<>();
 
-        setupRecyclerView();
         loadEmployeeList();
-    }
-
-    private void setupRecyclerView() {
-        binding.rvAttendanceTable.setLayoutManager(new LinearLayoutManager(getContext()));
-        adapter = new AttendanceAdapter(attendanceLogs);
-        binding.rvAttendanceTable.setAdapter(adapter);
     }
 
     /**
@@ -79,13 +61,13 @@ public class AdminAttendanceFragment extends Fragment {
                     binding.progressBar.setVisibility(View.GONE);
                     employees.clear();
                     List<String> employeeNames = new ArrayList<>();
-                    employeeNames.add("Select an Employee");
+                    employeeNames.add("Select an Employee to view Profile");
 
                     for (DocumentSnapshot doc : queryDocumentSnapshots) {
                         User user = doc.toObject(User.class);
                         if (user != null) {
+                            user.setUid(doc.getId());
                             employees.add(user);
-                            // Format: Name (EmployeeID)
                             employeeNames.add(user.getName() + " (" + user.getEmployeeId() + ")");
                         }
                     }
@@ -108,13 +90,14 @@ public class AdminAttendanceFragment extends Fragment {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if (position > 0) {
-                    // Offset by 1 because of the hint at position 0
+                    // Position 0 is the hint "Select an Employee..."
                     User selectedUser = employees.get(position - 1);
-                    loadAttendanceForEmployee(selectedUser);
-                } else {
-                    attendanceLogs.clear();
-                    adapter.notifyDataSetChanged();
-                    binding.tableHeader.setVisibility(View.GONE);
+                    
+                    // NEW LOGIC: Launch the pop-up window instead of showing a list here
+                    openAttendanceProfileDialog(selectedUser);
+                    
+                    // Reset spinner selection so it can be clicked again for the same person if needed
+                    binding.spinnerEmployees.setSelection(0);
                 }
             }
 
@@ -124,48 +107,11 @@ public class AdminAttendanceFragment extends Fragment {
     }
 
     /**
-     * Loads attendance logs for a specific employee from Firestore.
-     * Note: This query triggers the "Error loading logs" if the Index is missing.
+     * Creates and shows the new Professional Attendance Profile pop-up.
      */
-    private void loadAttendanceForEmployee(User user) {
-        if (user.getEmployeeId() == null) return;
-        
-        binding.progressBar.setVisibility(View.VISIBLE);
-        
-        // Query: Filter by employeeId AND Sort by timestamp
-        db.collection("attendance")
-                .whereEqualTo("employeeId", user.getEmployeeId())
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .addSnapshotListener((value, error) -> {
-                    binding.progressBar.setVisibility(View.GONE);
-                    
-                    if (error != null) {
-                        Log.e(TAG, "Firestore error: " + error.getMessage());
-                        // This error occurs because a Composite Index is missing in Firebase
-                        Toast.makeText(getContext(), "Error loading logs. Check Indexing.", Toast.LENGTH_LONG).show();
-                        return;
-                    }
-
-                    if (value != null) {
-                        attendanceLogs.clear();
-                        for (DocumentSnapshot doc : value) {
-                            AttendanceRecord record = doc.toObject(AttendanceRecord.class);
-                            if (record != null) {
-                                attendanceLogs.add(record);
-                            }
-                        }
-                        
-                        adapter.notifyDataSetChanged();
-                        
-                        if (attendanceLogs.isEmpty()) {
-                            binding.tvNoData.setVisibility(View.VISIBLE);
-                            binding.tableHeader.setVisibility(View.GONE);
-                        } else {
-                            binding.tvNoData.setVisibility(View.GONE);
-                            binding.tableHeader.setVisibility(View.VISIBLE);
-                        }
-                    }
-                });
+    private void openAttendanceProfileDialog(User user) {
+        AttendanceProfileDialog dialog = AttendanceProfileDialog.newInstance(user);
+        dialog.show(getChildFragmentManager(), "AttendanceProfileDialog");
     }
 
     @Override
