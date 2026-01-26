@@ -27,6 +27,7 @@ import java.util.List;
 /**
  * Fragment for Employees to view their own personal attendance history.
  * Data is presented in a horizontal monthly table format (CSV-style).
+ * FIXED: Resolved ViewBinding visibility error for included table header.
  */
 public class EmployeeHistoryFragment extends Fragment {
 
@@ -69,6 +70,8 @@ public class EmployeeHistoryFragment extends Fragment {
      * then we can query the attendance logs.
      */
     private void fetchEmployeeIdAndLoadLogs() {
+        if (mAuth.getCurrentUser() == null) return;
+        
         String uid = mAuth.getCurrentUser().getUid();
         binding.progressBar.setVisibility(View.VISIBLE);
 
@@ -78,6 +81,12 @@ public class EmployeeHistoryFragment extends Fragment {
                         User user = documentSnapshot.toObject(User.class);
                         if (user != null && user.getEmployeeId() != null) {
                             this.employeeId = user.getEmployeeId();
+                            
+                            // Update header info if views exist in this layout variant
+                            if (binding.tvHistoryId != null) {
+                                binding.tvHistoryId.setText("ID: " + this.employeeId);
+                            }
+                            
                             loadMyLogs();
                         } else {
                             binding.progressBar.setVisibility(View.GONE);
@@ -104,6 +113,7 @@ public class EmployeeHistoryFragment extends Fragment {
                     
                     if (error != null) {
                         Log.e(TAG, "Error listening for history logs", error);
+                        Toast.makeText(getContext(), "Error syncing logs.", Toast.LENGTH_SHORT).show();
                         return;
                     }
 
@@ -120,10 +130,12 @@ public class EmployeeHistoryFragment extends Fragment {
                         
                         if (historyLogs.isEmpty()) {
                             binding.tvNoData.setVisibility(View.VISIBLE);
-                            binding.tableHeader.setVisibility(View.GONE);
+                            // FIXED: Use getRoot() to set visibility on the included layout
+                            binding.tableHeader.getRoot().setVisibility(View.GONE);
                         } else {
                             binding.tvNoData.setVisibility(View.GONE);
-                            binding.tableHeader.setVisibility(View.VISIBLE);
+                            // FIXED: Use getRoot() to set visibility on the included layout
+                            binding.tableHeader.getRoot().setVisibility(View.VISIBLE);
                         }
                     }
                 });
