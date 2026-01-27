@@ -2,11 +2,13 @@ package com.inout.app;
 
 import android.app.AlertDialog;
 import android.os.Bundle;
+import android.text.InputType;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.Toast;
@@ -31,7 +33,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Updated Fragment to handle Multi-Selection, Bulk Deletion, and Bulk Location Assignment.
+ * Updated Fragment to handle Multi-Selection, Bulk Deletion, 
+ * and Individual/Bulk Location Assignment.
  */
 public class AdminEmployeesFragment extends Fragment implements EmployeeListAdapter.OnEmployeeActionListener {
 
@@ -110,6 +113,71 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
     }
 
     /**
+     * FIXED: This handles the individual "Approve" button on the employee card.
+     * It ensures a location is assigned even for single approvals.
+     */
+    @Override
+    public void onApproveClicked(User user) {
+        if (locationList.isEmpty()) {
+            Toast.makeText(getContext(), "Please add an Office Location first!", Toast.LENGTH_LONG).show();
+            return;
+        }
+        showIndividualApproveDialog(user);
+    }
+
+    private void showIndividualApproveDialog(User user) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setTitle("Approve " + user.getName());
+
+        LinearLayout layout = new LinearLayout(requireContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(60, 40, 60, 20);
+
+        final EditText inputId = new EditText(requireContext());
+        inputId.setHint("Employee ID (e.g. EMP001)");
+        inputId.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        if (user.getEmployeeId() != null) inputId.setText(user.getEmployeeId());
+        layout.addView(inputId);
+
+        final Spinner spinner = new Spinner(requireContext());
+        spinner.setPadding(0, 40, 0, 40);
+        List<String> names = new ArrayList<>();
+        for (CompanyConfig c : locationList) names.add(c.getName());
+        ArrayAdapter<String> spinAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, names);
+        spinAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(spinAdapter);
+        layout.addView(spinner);
+
+        builder.setView(layout);
+        builder.setPositiveButton("Approve", (dialog, which) -> {
+            String empId = inputId.getText().toString().trim();
+            int selectedIndex = spinner.getSelectedItemPosition();
+            if (!empId.isEmpty() && selectedIndex >= 0) {
+                String locId = locationList.get(selectedIndex).getId();
+                db.collection("users").document(user.getUid())
+                        .update("approved", true, 
+                                "employeeId", empId, 
+                                "assignedLocationId", locId)
+                        .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Approved and Assigned!", Toast.LENGTH_SHORT).show());
+            } else {
+                Toast.makeText(getContext(), "ID and Location required!", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
+
+    @Override
+    public void onDeleteClicked(User user) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Remove Employee")
+                .setMessage("Delete " + user.getName() + "?")
+                .setPositiveButton("Delete", (dialog, which) -> {
+                    db.collection("users").document(user.getUid()).delete();
+                }).setNegativeButton("Cancel", null).show();
+    }
+
+    /**
      * Triggered when Admin long-presses on a selection of employees.
      */
     @Override
@@ -131,7 +199,7 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
     private void showBulkDeleteConfirmation(List<User> selectedUsers) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Confirm Removal")
-                .setMessage("Are you sure you want to remove " + selectedUsers.size() + " employees? This cannot be undone.")
+                .setMessage("Are you sure you want to remove " + selectedUsers.size() + " employees?")
                 .setPositiveButton("Remove All", (dialog, which) -> {
                     performBulkDelete(selectedUsers);
                 })
@@ -187,9 +255,6 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
     private void performBulkAssignment(List<User> selectedUsers, String locId) {
         WriteBatch batch = db.batch();
         for (User user : selectedUsers) {
-            // Update assigned location AND set approved to true automatically
-            // If they already have an ID, it remains. If not, they just need an ID assigned later or 
-            // the admin can assign individual IDs in the future.
             batch.update(db.collection("users").document(user.getUid()), 
                     "assignedLocationId", locId,
                     "approved", true);
