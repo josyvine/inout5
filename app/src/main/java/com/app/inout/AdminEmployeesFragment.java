@@ -113,8 +113,7 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
     }
 
     /**
-     * FIXED: This handles the individual "Approve" button on the employee card.
-     * It ensures a location is assigned even for single approvals.
+     * FIXED: Implements the interface method for individual "Approve" button.
      */
     @Override
     public void onApproveClicked(User user) {
@@ -142,10 +141,18 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
         final Spinner spinner = new Spinner(requireContext());
         spinner.setPadding(0, 40, 0, 40);
         List<String> names = new ArrayList<>();
-        for (CompanyConfig c : locationList) names.add(c.getName());
+        int currentSelection = 0;
+        for (int i = 0; i < locationList.size(); i++) {
+            names.add(locationList.get(i).getName());
+            if (locationList.get(i).getId().equals(user.getAssignedLocationId())) {
+                currentSelection = i;
+            }
+        }
+        
         ArrayAdapter<String> spinAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, names);
         spinAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(spinAdapter);
+        spinner.setSelection(currentSelection);
         layout.addView(spinner);
 
         builder.setView(layout);
@@ -167,13 +174,17 @@ public class AdminEmployeesFragment extends Fragment implements EmployeeListAdap
         builder.show();
     }
 
+    /**
+     * FIXED: Implements the interface method for individual delete action.
+     */
     @Override
     public void onDeleteClicked(User user) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Remove Employee")
-                .setMessage("Delete " + user.getName() + "?")
+                .setMessage("Delete " + user.getName() + "? This cannot be undone.")
                 .setPositiveButton("Delete", (dialog, which) -> {
-                    db.collection("users").document(user.getUid()).delete();
+                    db.collection("users").document(user.getUid()).delete()
+                            .addOnSuccessListener(aVoid -> Toast.makeText(getContext(), "Employee removed.", Toast.LENGTH_SHORT).show());
                 }).setNegativeButton("Cancel", null).show();
     }
 
