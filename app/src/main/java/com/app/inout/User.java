@@ -6,7 +6,6 @@ import com.google.firebase.firestore.PropertyName;
 /**
  * Model class representing a user in the 'users' Firestore collection.
  * This is the bridge between Firestore and the app memory.
- * FIXED: Added PropertyName annotations to ensure location sync works.
  */
 @IgnoreExtraProperties
 public class User {
@@ -19,6 +18,8 @@ public class User {
     private boolean approved;
     private String employeeId; // Assigned by Admin (e.g., EMP001)
     private String photoUrl;
+    
+    // For Employees: The ID of the location they are assigned to for check-in
     private String assignedLocationId; 
 
     public User() {
@@ -32,7 +33,7 @@ public class User {
         this.approved = false;
     }
 
-    // Getters and Setters with PropertyName annotations
+    // Getters and Setters with explicit PropertyName mapping
 
     @PropertyName("uid")
     public String getUid() {
