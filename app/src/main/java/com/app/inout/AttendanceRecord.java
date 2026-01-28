@@ -1,10 +1,12 @@
 package com.inout.app.models;
 
 import com.google.firebase.firestore.IgnoreExtraProperties;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Professional Model class for a daily attendance record.
- * Fixed to support both the Check-In logic and the 10-column CSV table.
+ * Updated to support Transit History logic.
  */
 @IgnoreExtraProperties
 public class AttendanceRecord {
@@ -24,9 +26,13 @@ public class AttendanceRecord {
     private double checkOutLng;
     
     private String totalHours;
-    private String locationName;    // The office name assigned
-    private float distanceMeters;   // Distance from target at check-in
+    private String locationName;    // The initial or final office name
+    private float distanceMeters;   // Total accumulated distance
     
+    // TRANSIT LOGIC FIELDS
+    private List<String> movementLog; // Stores ["Loc A", "Loc B", "Loc C"]
+    private String lastVerifiedLocationId; // Stores the ID of the last place verified (to detect changes)
+
     // Security flags
     private boolean fingerprintVerified;
     private boolean gpsVerified; 
@@ -37,11 +43,11 @@ public class AttendanceRecord {
      * Default constructor required for Firestore.
      */
     public AttendanceRecord() {
+        this.movementLog = new ArrayList<>();
     }
 
     /**
      * Parameterized constructor required by EmployeeCheckInFragment.
-     * FIXED: This resolves the "constructor cannot be applied to given types" error.
      */
     public AttendanceRecord(String employeeId, String employeeName, String date, long timestamp) {
         this.employeeId = employeeId;
@@ -49,7 +55,27 @@ public class AttendanceRecord {
         this.date = date;
         this.timestamp = timestamp;
         this.fingerprintVerified = true; 
-        this.gpsVerified = true;    
+        this.gpsVerified = true;
+        this.movementLog = new ArrayList<>();
+    }
+
+    /**
+     * Helper to generate the Transit Summary string for CSV and UI.
+     */
+    public String getTransitSummary() {
+        if (movementLog == null || movementLog.size() <= 1) {
+            return "No transit record today";
+        }
+        
+        // Join the list with arrows (e.g., "Warehouse -> Canara Bank")
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < movementLog.size(); i++) {
+            builder.append(movementLog.get(i));
+            if (i < movementLog.size() - 1) {
+                builder.append(" → ");
+            }
+        }
+        return builder.toString();
     }
 
     /**
@@ -67,147 +93,63 @@ public class AttendanceRecord {
 
     // Getters and Setters
 
-    public String getRecordId() {
-        return recordId;
-    }
+    public String getRecordId() { return recordId; }
+    public void setRecordId(String recordId) { this.recordId = recordId; }
 
-    public void setRecordId(String recordId) {
-        this.recordId = recordId;
-    }
+    public String getEmployeeId() { return employeeId; }
+    public void setEmployeeId(String employeeId) { this.employeeId = employeeId; }
 
-    public String getEmployeeId() {
-        return employeeId;
-    }
+    public String getEmployeeName() { return employeeName; }
+    public void setEmployeeName(String employeeName) { this.employeeName = employeeName; }
 
-    public void setEmployeeId(String employeeId) {
-        this.employeeId = employeeId;
-    }
+    public String getDate() { return date; }
+    public void setDate(String date) { this.date = date; }
 
-    public String getEmployeeName() {
-        return employeeName;
-    }
+    public String getDayOfWeek() { return dayOfWeek; }
+    public void setDayOfWeek(String dayOfWeek) { this.dayOfWeek = dayOfWeek; }
 
-    public void setEmployeeName(String employeeName) {
-        this.employeeName = employeeName;
-    }
+    public String getCheckInTime() { return checkInTime; }
+    public void setCheckInTime(String checkInTime) { this.checkInTime = checkInTime; }
 
-    public String getDate() {
-        return date;
-    }
+    public double getCheckInLat() { return checkInLat; }
+    public void setCheckInLat(double checkInLat) { this.checkInLat = checkInLat; }
 
-    public void setDate(String date) {
-        this.date = date;
-    }
+    public double getCheckInLng() { return checkInLng; }
+    public void setCheckInLng(double checkInLng) { this.checkInLng = checkInLng; }
 
-    public String getDayOfWeek() {
-        return dayOfWeek;
-    }
+    public String getCheckOutTime() { return checkOutTime; }
+    public void setCheckOutTime(String checkOutTime) { this.checkOutTime = checkOutTime; }
 
-    public void setDayOfWeek(String dayOfWeek) {
-        this.dayOfWeek = dayOfWeek;
-    }
+    public double getCheckOutLat() { return checkOutLat; }
+    public void setCheckOutLat(double checkOutLat) { this.checkOutLat = checkOutLat; }
 
-    public String getCheckInTime() {
-        return checkInTime;
-    }
+    public double getCheckOutLng() { return checkOutLng; }
+    public void setCheckOutLng(double checkOutLng) { this.checkOutLng = checkOutLng; }
 
-    public void setCheckInTime(String checkInTime) {
-        this.checkInTime = checkInTime;
-    }
+    public String getTotalHours() { return totalHours; }
+    public void setTotalHours(String totalHours) { this.totalHours = totalHours; }
 
-    public double getCheckInLat() {
-        return checkInLat;
-    }
+    public String getLocationName() { return locationName; }
+    public void setLocationName(String locationName) { this.locationName = locationName; }
 
-    public void setCheckInLat(double checkInLat) {
-        this.checkInLat = checkInLat;
-    }
+    public float getDistanceMeters() { return distanceMeters; }
+    public void setDistanceMeters(float distanceMeters) { this.distanceMeters = distanceMeters; }
 
-    public double getCheckInLng() {
-        return checkInLng;
-    }
+    // NEW TRANSIT GETTERS/SETTERS
+    public List<String> getMovementLog() { return movementLog; }
+    public void setMovementLog(List<String> movementLog) { this.movementLog = movementLog; }
 
-    public void setCheckInLng(double checkInLng) {
-        this.checkInLng = checkInLng;
-    }
+    public String getLastVerifiedLocationId() { return lastVerifiedLocationId; }
+    public void setLastVerifiedLocationId(String lastVerifiedLocationId) { this.lastVerifiedLocationId = lastVerifiedLocationId; }
 
-    public String getCheckOutTime() {
-        return checkOutTime;
-    }
+    public boolean isFingerprintVerified() { return fingerprintVerified; }
+    public void setFingerprintVerified(boolean fingerprintVerified) { this.fingerprintVerified = fingerprintVerified; }
 
-    public void setCheckOutTime(String checkOutTime) {
-        this.checkOutTime = checkOutTime;
-    }
+    public boolean isGpsVerified() { return gpsVerified; }
+    public void setGpsVerified(boolean gpsVerified) { this.gpsVerified = gpsVerified; }
 
-    public double getCheckOutLat() {
-        return checkOutLat;
-    }
+    public void setLocationVerified(boolean verified) { this.gpsVerified = verified; }
 
-    public void setCheckOutLat(double checkOutLat) {
-        this.checkOutLat = checkOutLat;
-    }
-
-    public double getCheckOutLng() {
-        return checkOutLng;
-    }
-
-    public void setCheckOutLng(double checkOutLng) {
-        this.checkOutLng = checkOutLng;
-    }
-
-    public String getTotalHours() {
-        return totalHours;
-    }
-
-    public void setTotalHours(String totalHours) {
-        this.totalHours = totalHours;
-    }
-
-    public String getLocationName() {
-        return locationName;
-    }
-
-    public void setLocationName(String locationName) {
-        this.locationName = locationName;
-    }
-
-    public float getDistanceMeters() {
-        return distanceMeters;
-    }
-
-    public void setDistanceMeters(float distanceMeters) {
-        this.distanceMeters = distanceMeters;
-    }
-
-    public boolean isFingerprintVerified() {
-        return fingerprintVerified;
-    }
-
-    public void setFingerprintVerified(boolean fingerprintVerified) {
-        this.fingerprintVerified = fingerprintVerified;
-    }
-
-    public boolean isGpsVerified() {
-        return gpsVerified;
-    }
-
-    public void setGpsVerified(boolean gpsVerified) {
-        this.gpsVerified = gpsVerified;
-    }
-
-    /**
-     * Alias for setGpsVerified to maintain compatibility with existing Fragment logic.
-     * FIXED: This resolves the "cannot find symbol method setLocationVerified" error.
-     */
-    public void setLocationVerified(boolean verified) {
-        this.gpsVerified = verified;
-    }
-
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(long timestamp) {
-        this.timestamp = timestamp;
-    }
+    public long getTimestamp() { return timestamp; }
+    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
 }
