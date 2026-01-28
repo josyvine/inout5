@@ -79,16 +79,18 @@ public class EmployeeCheckInFragment extends Fragment {
             }
             
             if (doc != null && doc.exists()) {
-                // Map Firestore document to Java Object
+                // Map Firestore document to Java Object using the fixed model
                 currentUser = doc.toObject(User.class);
                 
                 if (currentUser != null) {
-                    // Update UI Header with live data
+                    // Update UI Header with live data from Firestore
                     binding.tvEmployeeName.setText(currentUser.getName() != null ? currentUser.getName() : "Unknown User");
                     binding.tvEmployeeId.setText(currentUser.getEmployeeId() != null ? currentUser.getEmployeeId() : "Pending ID");
 
                     // CHECK: Is a location assigned in the database?
+                    // Because of @PropertyName in User.java, this will no longer be NULL
                     String locId = currentUser.getAssignedLocationId();
+                    
                     if (locId != null && !locId.isEmpty()) {
                         // Success: Go get the coordinates for this location
                         fetchAssignedLocationDetails(locId);
@@ -153,14 +155,17 @@ public class EmployeeCheckInFragment extends Fragment {
         }
 
         if (todayRecord == null) {
+            // State: Ready for first check-in of the day
             binding.btnCheckIn.setEnabled(true);
             binding.btnCheckOut.setEnabled(false);
             binding.tvStatus.setText("Status: Ready to Check-In at " + assignedLocation.getName());
         } else if (todayRecord.getCheckOutTime() == null || todayRecord.getCheckOutTime().isEmpty()) {
+            // State: Already checked in, waiting to check out
             binding.btnCheckIn.setEnabled(false);
             binding.btnCheckOut.setEnabled(true);
             binding.tvStatus.setText("Status: Checked In at " + todayRecord.getCheckInTime());
         } else {
+            // State: Finished for today
             binding.btnCheckIn.setEnabled(false);
             binding.btnCheckOut.setEnabled(false);
             binding.tvStatus.setText("Status: Shift Completed (" + todayRecord.getTotalHours() + ")");
@@ -201,6 +206,7 @@ public class EmployeeCheckInFragment extends Fragment {
                 binding.progressBar.setVisibility(View.GONE);
                 
                 if (location != null) {
+                    // Check if employee is within the 100m radius of the assigned office
                     boolean inRange = LocationHelper.isWithinRadius(
                             location.getLatitude(), location.getLongitude(),
                             assignedLocation.getLatitude(), assignedLocation.getLongitude(),
@@ -232,6 +238,7 @@ public class EmployeeCheckInFragment extends Fragment {
         String dateId = TimeUtils.getCurrentDateId();
         String recordId = currentUser.getEmployeeId() + "_" + dateId;
 
+        // Build the attendance record object
         AttendanceRecord record = new AttendanceRecord(
                 currentUser.getEmployeeId(), 
                 currentUser.getName(), 
