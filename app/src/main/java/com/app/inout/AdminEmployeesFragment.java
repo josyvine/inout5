@@ -30,7 +30,8 @@ import com.google.firebase.firestore.WriteBatch;
 import com.inout.app.databinding.FragmentAdminEmployeesBinding;
 import com.inout.app.models.User;
 import com.inout.app.models.CompanyConfig;
-import com.inout.app.adapters.EmployeeListAdapter;
+
+// FIXED: Removed the incorrect import. Adapter is in the same package.
 
 import java.util.ArrayList;
 import java.util.Calendar;
