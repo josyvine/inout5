@@ -19,27 +19,23 @@
         android:layout_height="48dp"
         android:layout_gravity="center"
         android:src="@android:drawable/ic_menu_myplaces"
-        android:tint="#D32F2F"
         android:contentDescription="Selection Pin"
-        android:translationY="-24dp" /> 
-        <!-- TranslationY moves it up slightly so the 'point' of the pin is at the exact center -->
+        android:translationY="-24dp"
+        app:tint="#D32F2F" />
 
     <!-- LAYER 3: UI Controls -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="16dp"
-        android:pointerEvents="none"> 
-        <!-- pointerEvents=none allows touches to pass through empty areas to the map -->
+        android:padding="16dp">
 
-        <!-- Top Controls Container (Clickable to intercept touches) -->
+        <!-- Top Controls Container -->
         <LinearLayout
             android:id="@+id/top_bar_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:pointerEvents="auto"
             app:layout_constraintTop_toTopOf="parent">
 
             <!-- Close Button -->
@@ -78,7 +74,6 @@
             android:visibility="gone"
             app:cardCornerRadius="8dp"
             app:cardElevation="6dp"
-            android:pointerEvents="auto"
             app:layout_constraintTop_toBottomOf="@+id/top_bar_container"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
@@ -117,7 +112,6 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:layout_marginBottom="16dp"
-            android:pointerEvents="auto"
             app:layout_constraintBottom_toTopOf="@+id/btn_confirm_selection"
             app:layout_constraintEnd_toEndOf="parent">
 
@@ -128,7 +122,8 @@
                 android:background="@drawable/rounded_bg_white"
                 android:src="@android:drawable/ic_input_add"
                 android:elevation="4dp"
-                android:layout_marginBottom="8dp"/>
+                android:layout_marginBottom="8dp"
+                android:contentDescription="Zoom In" />
 
             <ImageButton
                 android:id="@+id/btn_zoom_out"
@@ -138,8 +133,7 @@
                 android:src="@android:drawable/ic_delete"
                 android:rotation="90" 
                 android:elevation="4dp"
-                android:contentDescription="Minus Icon (reusing delete rotated)"/>
-                <!-- Note: Using standard android icons to avoid missing resources. -->
+                android:contentDescription="Zoom Out" />
 
         </LinearLayout>
 
@@ -153,7 +147,6 @@
             android:textColor="@android:color/white"
             android:textStyle="bold"
             android:elevation="8dp"
-            android:pointerEvents="auto"
             app:layout_constraintBottom_toBottomOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
