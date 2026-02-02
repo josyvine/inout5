@@ -132,15 +132,41 @@
                         android:inputType="textCapWords" />
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_capture_gps"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                <!-- UPDATED: Split buttons for GPS and Map -->
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="55dp"
+                    android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="Or Use My Current GPS"
-                    android:textAllCaps="false"
-                    app:icon="@android:drawable/ic_menu_mylocation" />
+                    android:orientation="horizontal">
+
+                    <!-- Existing GPS Button (Preserved ID) -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_capture_gps"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="55dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:text="Use GPS"
+                        android:textAllCaps="false"
+                        app:icon="@android:drawable/ic_menu_mylocation"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"/>
+
+                    <!-- New Map Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_open_map"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="55dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:text="Select Map"
+                        android:textAllCaps="false"
+                        app:icon="@android:drawable/ic_dialog_map"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"/>
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tv_captured_coords"
@@ -177,7 +203,6 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/card_add_location" />
 
-        <!-- UPDATED: RECYCLERVIEW FOR INTERACTIVE LIST -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rv_locations"
             android:layout_width="0dp"
