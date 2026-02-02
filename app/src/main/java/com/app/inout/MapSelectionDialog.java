@@ -1,11 +1,8 @@
 package com.inout.app;
 
 import android.Manifest;
-import android.app.Dialog;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -16,13 +13,11 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
-import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -44,7 +39,7 @@ import java.util.Locale;
 /**
  * Full Screen Dialog for selecting a location on a map.
  * Uses OpenStreetMap (osmdroid).
- * The user drags the map, and the center fixed pointer determines the selection.
+ * Features: Stationary center pointer, map panning, and text search.
  */
 public class MapSelectionDialog extends DialogFragment {
 
@@ -53,7 +48,9 @@ public class MapSelectionDialog extends DialogFragment {
     private CardView cvSearchBar;
     private OnLocationSelectedListener listener;
 
-    // Interface to pass data back to the Fragment
+    /**
+     * Interface to pass the captured coordinates and address back to the Admin fragment.
+     */
     public interface OnLocationSelectedListener {
         void onLocationSelected(double lat, double lng, String addressName);
     }
@@ -65,11 +62,11 @@ public class MapSelectionDialog extends DialogFragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Important: Initialize OSMDroid configuration
+        // OSMDroid configuration initialization
         Context ctx = requireContext().getApplicationContext();
         Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx));
         
-        // Set full screen style
+        // Use Full Screen Theme
         setStyle(DialogFragment.STYLE_NORMAL, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
     }
 
@@ -83,7 +80,7 @@ public class MapSelectionDialog extends DialogFragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Bind Views
+        // Bind UI Elements
         mapView = view.findViewById(R.id.map_view);
         etSearch = view.findViewById(R.id.et_map_search);
         cvSearchBar = view.findViewById(R.id.cv_search_bar);
@@ -95,15 +92,13 @@ public class MapSelectionDialog extends DialogFragment {
         ImageButton btnZoomOut = view.findViewById(R.id.btn_zoom_out);
         Button btnSave = view.findViewById(R.id.btn_confirm_selection);
 
-        // Setup Map
         setupMap();
-        
-        // Try to center on user's current location initially
         centerOnCurrentLocation();
 
-        // Listeners
+        // Close the dialog
         btnClose.setOnClickListener(v -> dismiss());
 
+        // Toggle search visibility
         btnToggleSearch.setOnClickListener(v -> {
             if (cvSearchBar.getVisibility() == View.VISIBLE) {
                 cvSearchBar.setVisibility(View.GONE);
@@ -115,9 +110,10 @@ public class MapSelectionDialog extends DialogFragment {
             }
         });
 
+        // Trigger search
         btnSearchGo.setOnClickListener(v -> performSearch());
         
-        // Handle keyboard "Search" action
+        // Trigger search on keyboard action
         etSearch.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                 performSearch();
@@ -126,18 +122,20 @@ public class MapSelectionDialog extends DialogFragment {
             return false;
         });
 
+        // Manual zoom controls
         btnZoomIn.setOnClickListener(v -> mapView.getController().zoomIn());
         btnZoomOut.setOnClickListener(v -> mapView.getController().zoomOut());
 
+        // Capture logic
         btnSave.setOnClickListener(v -> confirmSelection());
     }
 
     private void setupMap() {
-        mapView.setTileSource(TileSourceFactory.MAPNIK); // Standard Free OSM Map
-        mapView.setMultiTouchControls(true); // Enable Pinch to Zoom
+        mapView.setTileSource(TileSourceFactory.MAPNIK); // Standard OSM tiles
+        mapView.setMultiTouchControls(true); // Pinch to zoom support
         
         IMapController mapController = mapView.getController();
-        mapController.setZoom(15.0); // Default Zoom Level
+        mapController.setZoom(15.0);
     }
 
     private void centerOnCurrentLocation() {
@@ -155,9 +153,9 @@ public class MapSelectionDialog extends DialogFragment {
                 GeoPoint startPoint = new GeoPoint(lastLocation.getLatitude(), lastLocation.getLongitude());
                 mapView.getController().setCenter(startPoint);
             } else {
-                // Default to a generic location (e.g., 0,0) if no GPS found
+                // Fallback coordinates if GPS hasn't locked yet
                 mapView.getController().setCenter(new GeoPoint(0.0, 0.0));
-                Toast.makeText(getContext(), "GPS not available. Please search or scroll.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "GPS Signal weak. Please use Search.", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -168,7 +166,6 @@ public class MapSelectionDialog extends DialogFragment {
 
         hideKeyboard();
         
-        // Use Android Geocoder to find location from text
         Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
         try {
             List<Address> addresses = geocoder.getFromLocationName(query, 1);
@@ -176,33 +173,30 @@ public class MapSelectionDialog extends DialogFragment {
                 Address result = addresses.get(0);
                 GeoPoint target = new GeoPoint(result.getLatitude(), result.getLongitude());
                 
-                // Animate map to result
                 mapView.getController().animateTo(target);
-                mapView.getController().setZoom(17.0); // Zoom in on result
+                mapView.getController().setZoom(17.0); 
             } else {
-                Toast.makeText(getContext(), "Location not found.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Address not found.", Toast.LENGTH_SHORT).show();
             }
         } catch (IOException e) {
-            e.printStackTrace();
-            Toast.makeText(getContext(), "Search error. Check internet.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "Geocoder Error. Check connection.", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void confirmSelection() {
-        // Get the coordinates at the center of the screen (under the pin)
+        // Capture map center (exactly under the stationary pointer)
         GeoPoint centerPoint = (GeoPoint) mapView.getMapCenter();
         double lat = centerPoint.getLatitude();
         double lng = centerPoint.getLongitude();
 
-        // Try to find a human-readable name for this spot
-        String addressName = "Map Selected Location";
+        String addressName = "";
         Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
         try {
             List<Address> addresses = geocoder.getFromLocation(lat, lng, 1);
             if (addresses != null && !addresses.isEmpty()) {
                 Address address = addresses.get(0);
                 
-                // Construct a meaningful name
+                // Attempt to build a descriptive location name
                 if (address.getFeatureName() != null) {
                     addressName = address.getFeatureName();
                 } else if (address.getThoroughfare() != null) {
@@ -210,17 +204,11 @@ public class MapSelectionDialog extends DialogFragment {
                 } else if (address.getLocality() != null) {
                     addressName = address.getLocality();
                 }
-                
-                // If it's just a number, append street
-                if (addressName.matches("\\d+") && address.getThoroughfare() != null) {
-                    addressName = addressName + " " + address.getThoroughfare();
-                }
             }
         } catch (IOException e) {
-            // Failed to get name, stick with default
+            // Address name remains empty if geocoding fails
         }
 
-        // Send data back
         if (listener != null) {
             listener.onLocationSelected(lat, lng, addressName);
         }
@@ -229,14 +217,14 @@ public class MapSelectionDialog extends DialogFragment {
 
     private void showKeyboard() {
         InputMethodManager imm = (InputMethodManager) requireContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-        imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+        if (imm != null) imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
     }
 
     private void hideKeyboard() {
         View view = getView();
         if (view != null) {
             InputMethodManager imm = (InputMethodManager) requireContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+            if (imm != null) imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
         }
     }
 
