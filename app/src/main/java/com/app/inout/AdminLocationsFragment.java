@@ -34,7 +34,7 @@ import java.util.Locale;
 
 /**
  * Updated Fragment for Office Locations.
- * Features: Remote Search, GPS Capture, and Interactive Selection/Deletion.
+ * Features: Remote Search, GPS Capture, Map Selection, and Interactive Selection/Deletion.
  */
 public class AdminLocationsFragment extends Fragment implements LocationAdapter.OnLocationActionListener {
 
@@ -88,8 +88,34 @@ public class AdminLocationsFragment extends Fragment implements LocationAdapter.
         // Capture current GPS logic
         binding.btnCaptureGps.setOnClickListener(v -> captureCurrentLocation());
 
+        // NEW: Open Map Selection Logic
+        binding.btnOpenMap.setOnClickListener(v -> openMapSelectionDialog());
+
         // Save logic
         binding.btnSaveLocation.setOnClickListener(v -> saveLocationToFirestore());
+    }
+
+    /**
+     * NEW: Opens the Full Screen Map Dialog to pick a location manually.
+     */
+    private void openMapSelectionDialog() {
+        MapSelectionDialog dialog = new MapSelectionDialog();
+        dialog.setOnLocationSelectedListener((lat, lng, addressName) -> {
+            // Update local variables
+            this.capturedLat = lat;
+            this.capturedLng = lng;
+
+            // Update UI
+            if (addressName != null && !addressName.isEmpty()) {
+                binding.etLocationName.setText(addressName);
+            } else {
+                binding.etLocationName.setText("Selected Location");
+            }
+            
+            binding.tvCapturedCoords.setText(String.format("Map Selected:\nLat: %.6f | Lng: %.6f", capturedLat, capturedLng));
+            binding.tvCapturedCoords.setVisibility(View.VISIBLE);
+        });
+        dialog.show(getChildFragmentManager(), "MapSelectionDialog");
     }
 
     private void searchLocationByAddress(String addressString) {
