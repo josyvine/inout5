@@ -88,7 +88,7 @@ public class AdminLocationsFragment extends Fragment implements LocationAdapter.
         // Capture current GPS logic
         binding.btnCaptureGps.setOnClickListener(v -> captureCurrentLocation());
 
-        // NEW: Open Map Selection Logic
+        // Open Map Selection Logic
         binding.btnOpenMap.setOnClickListener(v -> openMapSelectionDialog());
 
         // Save logic
@@ -96,7 +96,8 @@ public class AdminLocationsFragment extends Fragment implements LocationAdapter.
     }
 
     /**
-     * NEW: Opens the Full Screen Map Dialog to pick a location manually.
+     * Opens the Full Screen Map Dialog to pick a location manually.
+     * Receives Latitude, Longitude, and detailed Address Name (including Postal Code).
      */
     private void openMapSelectionDialog() {
         MapSelectionDialog dialog = new MapSelectionDialog();
@@ -105,13 +106,14 @@ public class AdminLocationsFragment extends Fragment implements LocationAdapter.
             this.capturedLat = lat;
             this.capturedLng = lng;
 
-            // Update UI
+            // Update UI with the detailed address (Place + Area + Postal Code)
             if (addressName != null && !addressName.isEmpty()) {
                 binding.etLocationName.setText(addressName);
             } else {
-                binding.etLocationName.setText("Selected Location");
+                binding.etLocationName.setText("Map Point Location");
             }
             
+            // Display captured coordinates in the sub-label
             binding.tvCapturedCoords.setText(String.format("Map Selected:\nLat: %.6f | Lng: %.6f", capturedLat, capturedLng));
             binding.tvCapturedCoords.setVisibility(View.VISIBLE);
         });
@@ -162,6 +164,9 @@ public class AdminLocationsFragment extends Fragment implements LocationAdapter.
                     capturedLng = location.getLongitude();
                     binding.tvCapturedCoords.setText(String.format("Current GPS:\nLat: %.6f | Lng: %.6f", capturedLat, capturedLng));
                     binding.tvCapturedCoords.setVisibility(View.VISIBLE);
+                    
+                    // Trigger reverse geocoding for GPS capture to also get postal code if possible
+                    updateLocationNameFromGps(location);
                 }
             }
 
@@ -172,6 +177,26 @@ public class AdminLocationsFragment extends Fragment implements LocationAdapter.
                 Toast.makeText(getContext(), "GPS Error: " + errorMsg, Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    private void updateLocationNameFromGps(Location loc) {
+        Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
+        try {
+            List<Address> addresses = geocoder.getFromLocation(loc.getLatitude(), loc.getLongitude(), 1);
+            if (addresses != null && !addresses.isEmpty()) {
+                Address addr = addresses.get(0);
+                StringBuilder sb = new StringBuilder();
+                if (addr.getFeatureName() != null && !addr.getFeatureName().contains("+")) {
+                    sb.append(addr.getFeatureName()).append(", ");
+                }
+                if (addr.getLocality() != null) sb.append(addr.getLocality()).append(" ");
+                if (addr.getPostalCode() != null) sb.append("- ").append(addr.getPostalCode());
+                
+                binding.etLocationName.setText(sb.toString().trim());
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Reverse Geocode failed", e);
+        }
     }
 
     private void saveLocationToFirestore() {
@@ -223,9 +248,6 @@ public class AdminLocationsFragment extends Fragment implements LocationAdapter.
                 });
     }
 
-    /**
-     * NEW: Implementation of the Delete logic via Long Press.
-     */
     @Override
     public void onDeleteRequested(List<CompanyConfig> selectedLocations) {
         new AlertDialog.Builder(requireContext())
